@@ -1,0 +1,6 @@
+preencher senha e usuário no credenciais.JSON
+se a pasta for essa própria, não precisar por nada no json, deixa só as aspas
+se por em outra pasta, aí poe o diretorio e o arquivo de bras-vendors dentro dela
+se quiser alterar os equipamentos é só mexer no arquivo bras-vendros.
+
+O resultado vem no arquivo VLANs_BRAS_todos.

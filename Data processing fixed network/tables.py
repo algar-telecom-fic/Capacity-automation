@@ -1,6 +1,8 @@
-import re
 import pandas as pd
+import re
 import numpy as np
+import openpyxl
+import pkg_resources.py2_warn
 
 def getTuples(fileName):
     f = open(fileName)
@@ -151,7 +153,7 @@ def renameColumns(df, columns):
 
     return df
 
-def generateCompleteReport(fileBase, fileActual, countDays, name):
+def generateCompleteReport(fileBase, fileActual, countDays, name_xlsx):
     actual = fileActual
     base = fileBase
     base = renameColumns(base, list(base.columns))
@@ -160,7 +162,7 @@ def generateCompleteReport(fileBase, fileActual, countDays, name):
     
     for index,row in actual.iterrows():
         rowBase = base.loc[base['table_id'] == row.table_id]
-        usage = str(int(round(row.used_number/row.maximum_tuple_number, 2)*100)) + '%'
+        usage = float(round(row.used_number/row.maximum_tuple_number, 4)*100)
         realGrowth = int(round(((row.used_number - rowBase.used_number.values[0])/countDays)*30))
         
         available = round(row.maximum_tuple_number - row.used_number)
@@ -179,37 +181,59 @@ def generateCompleteReport(fileBase, fileActual, countDays, name):
     
     report = pd.DataFrame(completeReport, columns=['TABLE ID','TABLE NAME','CAPACIDADE','UTILIZADO','UTILIZADO %','CRESCIMENTO MENSAL','PREVISAO DE ESGOTAMENTO / MES'])
 
-    report.to_csv(name, index=False)
+    report.to_excel(name_xlsx, index=False)
+    colorCells(name_xlsx)
     return report
 
-def run(current_file_ULA, previous_file_ULA, name_csv_ULA, ULA_softx, days_ULA, current_file_SPO, previous_file_SPO, name_csv_SPO, SPO_softx, days_SPO, current_file_FAC, previous_file_FAC, name_csv_FAC, FAC_softx, days_FAC):
-    current_ULA = createFinalCSV(current_file_ULA, 'Premissas Tabelas.xlsx', ULA_softx)
-    previous_ULA = createFinalCSV(previous_file_ULA, 'Premissas Tabelas.xlsx', ULA_softx)
-    generateCompleteReport(previous_ULA, current_ULA, days_ULA, name_csv_ULA)
-    
-    current_SPO = createFinalCSV(current_file_SPO, 'Premissas Tabelas.xlsx', SPO_softx)
-    previous_SPO = createFinalCSV(previous_file_SPO, 'Premissas Tabelas.xlsx', SPO_softx)
-    generateCompleteReport(previous_SPO, current_SPO, days_SPO, name_csv_SPO)
+def colorCells(name_xlsx):
+    red_color = openpyxl.styles.PatternFill(start_color = 'FFFF0000', end_color = 'FFFF0000', fill_type = 'solid')
+    yellow_color = openpyxl.styles.PatternFill(start_color = 'FFFF00', end_color = 'FFFF00', fill_type = 'solid')
+    green_color = openpyxl.styles.PatternFill(start_color = '008000', end_color = '008000', fill_type = 'solid')
+    grey_color = openpyxl.styles.PatternFill(start_color = '4F4F4F', end_color = '4F4F4F', fill_type = 'solid')
 
-    current_FAC = createFinalCSV(current_file_FAC, 'Premissas Tabelas.xlsx', FAC_softx)
-    previous_FAC = createFinalCSV(previous_file_FAC, 'Premissas Tabelas.xlsx', FAC_softx)
-    generateCompleteReport(previous_FAC, current_FAC, days_FAC, name_csv_FAC)
-    
+    sheets_file = openpyxl.load_workbook(name_xlsx, data_only=True)
+    sheet = sheets_file.worksheets[0]
+
+    column = 5
+    for row in range(2, 5000):
+        if sheet.cell(column=column, row=row).value is None:
+            break
+        else:
+            comp = float(sheet.cell(column=column, row=row).value)
+            if comp >= 99.5:
+                sheet.cell(column=column, row=row).value = str(format(float(sheet.cell(column=column, row=row).value), '.2f')) + '%'
+                sheet.cell(column=column, row=row).fill = grey_color
+            elif comp >= 90.5 and comp < 99.5:
+                sheet.cell(column=column, row=row).value = str(format(float(sheet.cell(column=column, row=row).value), '.2f')) + '%'
+                sheet.cell(column=column, row=row).fill = red_color
+            elif comp >= 70.5 and comp < 90.5:
+                sheet.cell(column=column, row=row).value = str(format(float(sheet.cell(column=column, row=row).value), '.2f')) + '%'
+                sheet.cell(column=column, row=row).fill = yellow_color
+            elif comp >= 50.5 and comp < 70.5:
+                sheet.cell(column=column, row=row).value = str(format(float(sheet.cell(column=column, row=row).value), '.2f')) + '%'
+                sheet.cell(column=column, row=row).fill = green_color
+            else:
+                sheet.cell(column=column, row=row).value = str(format(float(sheet.cell(column=column, row=row).value), '.2f')) + '%'
+
+    sheets_file.save(name_xlsx)    
+
+def run(current_file, previous_file, name_xlsx, days, softx):
+    if softx == 0: premise = 'ULA'
+    elif softx == 4: premise = 'SPO'
+    elif softx == 8: premise = 'FAC'
+    current = createFinalCSV(current_file, 'Premissas Tabelas.xlsx', premise)
+    previous = createFinalCSV(previous_file,'Premissas Tabelas.xlsx', premise)
+    generateCompleteReport(previous, current, days, name_xlsx)
 
 if __name__ == '__main__':
+    print('O formato dos arquivos finais é xlsx')
+    input('Lembre de mudar os argumentos no txt, após ter feito isso tecle Enter: ')
+    
     archive = open('arguments_tables.txt','r')
-    line = []
-    for lines in archive:
-        lines = lines.strip()
-        line.append(lines)
+    list_path = [lines[lines.find('=')+2:lines.find('\n')] for lines in archive if(lines != '\n')]
     archive.close()
 
-    list_path = []
-    for pos in line:
-        count = 0
-        for character in pos:
-            count += 1
-            if character == "=":
-                list_path.append(pos[count+1:])
+    for argument in range(0, len(list_path), 4):
+        run(list_path[argument], list_path[argument+1], list_path[argument+2] , int(list_path[argument+3]), argument)
 
-    run(list_path[0], list_path[1], list_path[2] ,'ULA', int(list_path[3]), list_path[4] , list_path[5], list_path[6], 'SPO', int(list_path[7]), list_path[8], list_path[9], list_path[10], 'FAC', int(list_path[11]))
+    input('Os arquivos estão prontos, tecle Enter para sair')
